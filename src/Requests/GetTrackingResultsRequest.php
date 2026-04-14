@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Graystack\Ship24\Requests;
+namespace GraystackIT\Ship24\Requests;
 
 use Saloon\Enums\Method;
 use Saloon\Http\Request;

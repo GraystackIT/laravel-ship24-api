@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Graystack\Ship24\Tests;
+namespace GraystackIT\Ship24\Tests;
 
-use Graystack\Ship24\Ship24ServiceProvider;
+use GraystackIT\Ship24\Ship24ServiceProvider;
 use Orchestra\Testbench\TestCase as OrchestraTestCase;
 
 class TestCase extends OrchestraTestCase

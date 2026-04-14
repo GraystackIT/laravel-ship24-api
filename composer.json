@@ -1,5 +1,5 @@
 {
-    "name": "graystack/laravel-ship24-api",
+    "name": "graystackit/laravel-ship24-api",
     "description": "Laravel package for the Ship24 shipment tracking API, built on Saloon 4",
     "type": "library",
     "license": "MIT",
@@ -22,18 +22,18 @@
     },
     "autoload": {
         "psr-4": {
-            "Graystack\\Ship24\\": "src/"
+            "GraystackIT\\Ship24\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Graystack\\Ship24\\Tests\\": "tests/"
+            "GraystackIT\\Ship24\\Tests\\": "tests/"
         }
     },
     "extra": {
         "laravel": {
             "providers": [
-                "Graystack\\Ship24\\Ship24ServiceProvider"
+                "GraystackIT\\Ship24\\Ship24ServiceProvider"
             ]
         }
     },

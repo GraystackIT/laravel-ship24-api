@@ -1,11 +1,11 @@
-# graystack/laravel-ship24-api
+# graystackit/laravel-ship24-api
 
 Laravel package for the [Ship24](https://www.ship24.com/) shipment tracking API, built on [Saloon 4](https://docs.saloon.dev/).
 
 ## Installation
 
 ```bash
-composer require graystack/laravel-ship24-api
+composer require graystackit/laravel-ship24-api
 ```
 
 Publish the config file:
@@ -25,7 +25,7 @@ SHIP24_API_KEY=your-api-key-here
 Inject or resolve `Ship24Client` from the container:
 
 ```php
-use Graystack\Ship24\Ship24Client;
+use GraystackIT\Ship24\Ship24Client;
 
 $client = app(Ship24Client::class);
 ```
@@ -78,10 +78,10 @@ foreach ($results as $result) {
 
 ## Error handling
 
-All API errors throw `Graystack\Ship24\Exceptions\Ship24ApiException`:
+All API errors throw `GraystackIT\Ship24\Exceptions\Ship24ApiException`:
 
 ```php
-use Graystack\Ship24\Exceptions\Ship24ApiException;
+use GraystackIT\Ship24\Exceptions\Ship24ApiException;
 
 try {
     $results = $client->searchByTrackingNumber('INVALID');

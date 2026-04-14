@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Graystack\Ship24\Connectors;
+namespace GraystackIT\Ship24\Connectors;
 
 use Saloon\Http\Connector;
 use Saloon\Traits\Plugins\AcceptsJson;

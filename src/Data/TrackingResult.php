@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Graystack\Ship24\Data;
+namespace GraystackIT\Ship24\Data;
 
 class TrackingResult
 {

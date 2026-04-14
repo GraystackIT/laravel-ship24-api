@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Graystack\Ship24;
+namespace GraystackIT\Ship24;
 
-use Graystack\Ship24\Connectors\Ship24Connector;
+use GraystackIT\Ship24\Connectors\Ship24Connector;
 use Illuminate\Support\ServiceProvider;
 
 class Ship24ServiceProvider extends ServiceProvider

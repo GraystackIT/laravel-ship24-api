@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Graystack\Ship24;
+namespace GraystackIT\Ship24;
 
-use Graystack\Ship24\Connectors\Ship24Connector;
-use Graystack\Ship24\Data\Tracker;
-use Graystack\Ship24\Data\TrackingResult;
-use Graystack\Ship24\Exceptions\Ship24ApiException;
-use Graystack\Ship24\Requests\CreateTrackerRequest;
-use Graystack\Ship24\Requests\GetTrackingResultsRequest;
-use Graystack\Ship24\Requests\SearchTrackingRequest;
+use GraystackIT\Ship24\Connectors\Ship24Connector;
+use GraystackIT\Ship24\Data\Tracker;
+use GraystackIT\Ship24\Data\TrackingResult;
+use GraystackIT\Ship24\Exceptions\Ship24ApiException;
+use GraystackIT\Ship24\Requests\CreateTrackerRequest;
+use GraystackIT\Ship24\Requests\GetTrackingResultsRequest;
+use GraystackIT\Ship24\Requests\SearchTrackingRequest;
 use Illuminate\Support\Facades\Log;
 use Saloon\Exceptions\Request\RequestException;
 
