@@ -7,12 +7,14 @@ namespace GraystackIT\Ship24\Data;
 class TrackingResult
 {
     /**
-     * @param TrackingEvent[] $events
+     * @param TrackingEvent[]      $events
+     * @param array<string, mixed>|null $statistics
      */
     public function __construct(
         public readonly Tracker $tracker,
         public readonly Shipment $shipment,
         public readonly array $events,
+        public readonly ?array $statistics = null,
     ) {}
 
     /**
@@ -29,6 +31,7 @@ class TrackingResult
             tracker: Tracker::fromArray($item['tracker'] ?? []),
             shipment: Shipment::fromArray($item['shipment'] ?? []),
             events: $events,
+            statistics: isset($item['statistics']) && is_array($item['statistics']) ? $item['statistics'] : null,
         );
     }
 
@@ -46,9 +49,10 @@ class TrackingResult
     public function toArray(): array
     {
         return [
-            'tracker'  => $this->tracker->toArray(),
-            'shipment' => $this->shipment->toArray(),
-            'events'   => array_map(static fn (TrackingEvent $e) => $e->toArray(), $this->events),
+            'tracker'    => $this->tracker->toArray(),
+            'shipment'   => $this->shipment->toArray(),
+            'events'     => array_map(static fn (TrackingEvent $e) => $e->toArray(), $this->events),
+            'statistics' => $this->statistics,
         ];
     }
 }

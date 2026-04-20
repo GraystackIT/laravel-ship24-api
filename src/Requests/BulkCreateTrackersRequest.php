@@ -9,21 +9,24 @@ use Saloon\Enums\Method;
 use Saloon\Http\Request;
 use Saloon\Traits\Body\HasJsonBody;
 
-class SearchTrackingRequest extends Request implements HasBody
+class BulkCreateTrackersRequest extends Request implements HasBody
 {
     use HasJsonBody;
 
     protected Method $method = Method::POST;
 
-    public function __construct(private readonly string $trackingNumber) {}
+    /**
+     * @param array<int, array<string, mixed>> $trackers Up to 100 tracker-create objects
+     */
+    public function __construct(private readonly array $trackers) {}
 
     public function resolveEndpoint(): string
     {
-        return '/tracking/search';
+        return '/trackers/bulk';
     }
 
     protected function defaultBody(): array
     {
-        return ['trackingNumber' => $this->trackingNumber];
+        return $this->trackers;
     }
 }
