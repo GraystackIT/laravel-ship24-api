@@ -4,8 +4,8 @@ Laravel package for the [Ship24](https://www.ship24.com/) shipment tracking API,
 
 ## Requirements
 
-- PHP 8.2+
-- Laravel 10, 11, 12, or 13
+- PHP 8.3+
+- Laravel 11, 12, or 13
 
 ## Installation
 
