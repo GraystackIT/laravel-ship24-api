@@ -16,7 +16,7 @@ class TestCase extends OrchestraTestCase
 
     protected function defineEnvironment($app): void
     {
-        $app['config']->set('ship24.api_key', 'test-api-key');
-        $app['config']->set('ship24.base_url', 'https://api.ship24.com/public/v1');
+        $app['config']->set('ship24.api_key', config('ship24.api_key'));
+        $app['config']->set('ship24.base_url', config('ship24.base_url'));
     }
 }
