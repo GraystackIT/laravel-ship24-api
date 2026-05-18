@@ -24,13 +24,14 @@ class BulkCreateItem
             $tracker = Tracker::fromArray($item['tracker']);
         }
 
-        $error = isset($item['error']) && is_array($item['error']) ? $item['error'] : [];
+        $errors = isset($item['errors']) && is_array($item['errors']) ? $item['errors'] : [];
+        $firstError = $errors[0] ?? [];
 
         return new self(
-            success: (bool) ($item['success'] ?? false),
+            success: (($item['itemStatus'] ?? '') !== 'error'),
             tracker: $tracker,
-            errorCode: isset($error['code']) ? (string) $error['code'] : null,
-            errorMessage: isset($error['message']) ? (string) $error['message'] : null,
+            errorCode: isset($firstError['code']) ? (string) $firstError['code'] : null,
+            errorMessage: isset($firstError['message']) ? (string) $firstError['message'] : null,
         );
     }
 

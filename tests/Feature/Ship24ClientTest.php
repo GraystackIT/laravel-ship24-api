@@ -167,8 +167,8 @@ it('bulk creates trackers and returns BulkCreateResult', function () {
                     'status'  => 'success',
                     'summary' => ['requested' => 2, 'success' => 2, 'error' => 0],
                     'items'   => [
-                        ['success' => true, 'tracker' => makeTracker('trk_1', 'NUM1')],
-                        ['success' => true, 'tracker' => makeTracker('trk_2', 'NUM2')],
+                        ['itemStatus' => 'created', 'tracker' => makeTracker('trk_1', 'NUM1'), 'errors' => []],
+                        ['itemStatus' => 'created', 'tracker' => makeTracker('trk_2', 'NUM2'), 'errors' => []],
                     ],
                 ],
             ],
@@ -202,8 +202,8 @@ it('handles partial bulk create with errors', function () {
                     'status'  => 'partial',
                     'summary' => ['requested' => 2, 'success' => 1, 'error' => 1],
                     'items'   => [
-                        ['success' => true, 'tracker' => makeTracker('trk_1', 'NUM1')],
-                        ['success' => false, 'error' => ['code' => '400', 'message' => 'Invalid tracking number']],
+                        ['itemStatus' => 'created', 'tracker' => makeTracker('trk_1', 'NUM1'), 'errors' => []],
+                        ['itemStatus' => 'error', 'tracker' => null, 'errors' => [['code' => '400', 'message' => 'Invalid tracking number']]],
                     ],
                 ],
             ],
@@ -259,7 +259,7 @@ it('throws Ship24ApiException on 400 for bulkCreateTrackers', function () {
 it('creates tracker and returns tracking result', function () {
     $mockClient = new MockClient([
         CreateAndTrackRequest::class => MockResponse::make([
-            'data' => ['tracking' => makeTracking('trk_ct1', '1Z999AA10123456784')],
+            'data' => ['trackings' => [makeTracking('trk_ct1', '1Z999AA10123456784')]],
         ], 200),
     ]);
 
@@ -279,7 +279,7 @@ it('createAndTrack result carries statistics when present', function () {
     $mockClient = new MockClient([
         CreateAndTrackRequest::class => MockResponse::make([
             'data' => [
-                'tracking' => makeTracking() + ['statistics' => ['transitDays' => 5]],
+                'trackings' => [makeTracking() + ['statistics' => ['transitDays' => 5]]],
             ],
         ], 200),
     ]);

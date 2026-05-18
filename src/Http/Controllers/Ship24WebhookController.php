@@ -27,8 +27,7 @@ class Ship24WebhookController extends Controller
         }
 
         Log::info('Ship24: webhook received', [
-            'trackingNumber' => $payload['trackingNumber'] ?? null,
-            'trackerId'      => $payload['trackerId'] ?? null,
+            'count' => count($payload['trackings'] ?? []),
         ]);
 
         $updated = $service->syncFromWebhookPayload($payload);
@@ -44,14 +43,12 @@ class Ship24WebhookController extends Controller
             return true;
         }
 
-        $signature = $request->header('X-Ship24-Signature');
+        $authorization = $request->header('Authorization');
 
-        if (! $signature) {
+        if (! $authorization) {
             return false;
         }
 
-        $expected = 'sha256='.hash_hmac('sha256', $request->getContent(), (string) $secret);
-
-        return hash_equals($expected, $signature);
+        return hash_equals('Bearer '.(string) $secret, $authorization);
     }
 }

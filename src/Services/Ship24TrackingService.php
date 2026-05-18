@@ -96,48 +96,60 @@ class Ship24TrackingService
      */
     public function syncFromWebhookPayload(array $payload): int
     {
-        $trackingNumber = $payload['trackingNumber'] ?? null;
-        $trackerId      = $payload['trackerId'] ?? null;
+        $trackings = $payload['trackings'] ?? [];
 
-        if (! $trackingNumber && ! $trackerId) {
+        if (empty($trackings)) {
             return 0;
         }
 
-        $records = Ship24Tracking::query()
-            ->when($trackingNumber, fn ($q) => $q->where('tracking_number', $trackingNumber))
-            ->when($trackerId && ! $trackingNumber, fn ($q) => $q->orWhere('tracker_id', $trackerId))
-            ->get();
+        $totalUpdated = 0;
 
-        if ($records->isEmpty()) {
-            return 0;
+        foreach ($trackings as $item) {
+            $trackerData    = $item['tracker'] ?? [];
+            $trackingNumber = $trackerData['trackingNumber'] ?? null;
+            $trackerId      = $trackerData['trackerId'] ?? null;
+
+            if (! $trackingNumber && ! $trackerId) {
+                continue;
+            }
+
+            $records = Ship24Tracking::query()
+                ->when($trackingNumber, fn ($q) => $q->where('tracking_number', $trackingNumber))
+                ->when($trackerId && ! $trackingNumber, fn ($q) => $q->orWhere('tracker_id', $trackerId))
+                ->get();
+
+            if ($records->isEmpty()) {
+                continue;
+            }
+
+            $result = TrackingResult::fromArray([
+                'tracker'    => array_merge(
+                    [
+                        'trackerId'      => $trackerId ?? '',
+                        'trackingNumber' => $trackingNumber ?? '',
+                        'createdAt'      => now()->toIso8601String(),
+                        'isSubscribed'   => true,
+                    ],
+                    $trackerData,
+                ),
+                'shipment'   => $item['shipment'] ?? [],
+                'events'     => $item['events'] ?? [],
+                'statistics' => $item['statistics'] ?? null,
+            ]);
+
+            foreach ($records as $record) {
+                $this->applyResult($record, $result);
+            }
+
+            Log::info('Ship24: webhook synced tracking records', [
+                'trackingNumber' => $trackingNumber,
+                'trackerId'      => $trackerId,
+                'updated'        => $records->count(),
+            ]);
+
+            $totalUpdated += $records->count();
         }
 
-        // Build a TrackingResult from the webhook payload, merging top-level fields into the tracker stub.
-        $result = TrackingResult::fromArray([
-            'tracker'    => array_merge(
-                [
-                    'trackerId'      => $trackerId ?? '',
-                    'trackingNumber' => $trackingNumber ?? '',
-                    'createdAt'      => now()->toIso8601String(),
-                    'isSubscribed'   => true,
-                ],
-                $payload['tracker'] ?? [],
-            ),
-            'shipment'   => $payload['shipment'] ?? [],
-            'events'     => $payload['events'] ?? [],
-            'statistics' => $payload['statistics'] ?? null,
-        ]);
-
-        foreach ($records as $record) {
-            $this->applyResult($record, $result);
-        }
-
-        Log::info('Ship24: webhook synced tracking records', [
-            'trackingNumber' => $trackingNumber,
-            'trackerId'      => $trackerId,
-            'updated'        => $records->count(),
-        ]);
-
-        return $records->count();
+        return $totalUpdated;
     }
 }

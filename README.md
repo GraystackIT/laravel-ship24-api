@@ -284,18 +284,18 @@ Ship24 can push tracking updates to your application in real-time. The package r
 
 Configure this URL in the [Ship24 dashboard](https://app.ship24.com/).
 
-### Signature validation
+### Webhook secret validation
 
-Set `SHIP24_WEBHOOK_SECRET` to enable HMAC-SHA256 request validation. The package checks the `X-Ship24-Signature` header.
+Set `SHIP24_WEBHOOK_SECRET` to enable request validation. Ship24 sends your secret as a Bearer token in the `Authorization` header on every webhook request — the package validates it with a timing-safe comparison.
 
 ```env
 SHIP24_WEBHOOK_SECRET=your-webhook-secret
 ```
 
 The webhook handler automatically:
-1. Validates the optional signature
-2. Parses the payload (`trackingNumber`, `trackerId`, `shipment`, `events`)
-3. Finds all `ship24_trackings` records matching the tracking number / tracker ID
+1. Validates the `Authorization: Bearer <secret>` header (if a secret is configured)
+2. Iterates the `trackings` array in the payload
+3. Finds all `ship24_trackings` records matching each item's tracking number / tracker ID
 4. Updates them according to the configured `tracking_mode`
 
 ---

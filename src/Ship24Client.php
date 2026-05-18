@@ -231,7 +231,7 @@ class Ship24Client
             throw new Ship24ApiException('Ship24 API returned a non-JSON response for createAndTrack.');
         }
 
-        $tracking = $data['data']['tracking'] ?? [];
+        $tracking = $data['data']['trackings'][0] ?? [];
         $result   = TrackingResult::fromArray($tracking);
 
         Log::info('Ship24: create and track completed', ['trackerId' => $result->tracker->trackerId]);
