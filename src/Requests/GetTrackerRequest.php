@@ -8,9 +8,9 @@ use Saloon\Enums\Method;
 use Saloon\Http\Request;
 
 /**
- * GET /public/v1/trackers/{trackerId}/results — fetch tracking results for a tracker.
+ * GET /public/v1/trackers/{trackerId} — fetch a single tracker by ID.
  */
-class GetTrackingResultsRequest extends Request
+class GetTrackerRequest extends Request
 {
     protected Method $method = Method::GET;
 
@@ -28,7 +28,7 @@ class GetTrackingResultsRequest extends Request
      */
     public function resolveEndpoint(): string
     {
-        return '/trackers/'.$this->trackerId.'/results';
+        return '/trackers/'.$this->trackerId;
     }
 
     /**

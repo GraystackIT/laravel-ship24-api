@@ -12,6 +12,7 @@ use GraystackIT\Ship24\Exceptions\Ship24ApiException;
 use GraystackIT\Ship24\Requests\BulkCreateTrackersRequest;
 use GraystackIT\Ship24\Requests\CreateAndTrackRequest;
 use GraystackIT\Ship24\Requests\CreateTrackerRequest;
+use GraystackIT\Ship24\Requests\GetTrackerRequest;
 use GraystackIT\Ship24\Requests\GetTrackingByTrackingNumberRequest;
 use GraystackIT\Ship24\Requests\GetTrackingResultsRequest;
 use GraystackIT\Ship24\Requests\ListTrackersRequest;
@@ -20,21 +21,75 @@ use GraystackIT\Ship24\Requests\UpdateTrackerRequest;
 use Illuminate\Support\Facades\Log;
 use Saloon\Exceptions\Request\RequestException;
 
+/**
+ * Primary client for interacting with the Ship24 tracking API.
+ */
 class Ship24Client
 {
+    /**
+     * @param Ship24Connector $connector
+     */
     public function __construct(private readonly Ship24Connector $connector) {}
 
     /**
      * Create a tracker for a given tracking number.
      *
+     * @param  string      $trackingNumber
+     * @param  string|null $shipmentReference
+     * @param  string|null $clientTrackerId
+     * @param  string|null $originCountryCode
+     * @param  string|null $destinationCountryCode
+     * @param  string|null $destinationPostCode
+     * @param  string|null $shippingDate
+     * @param  string[]|null $courierCode
+     * @param  string|null $courierName
+     * @param  string|null $trackingUrl
+     * @param  string|null $orderNumber
+     * @param  string|null $title
+     * @param  string|null $recipientEmail
+     * @param  string|null $recipientName
+     * @param  bool|null   $restrictTrackingToCourierCode
+     * @return Tracker
+     *
      * @throws Ship24ApiException
      */
-    public function createTracker(string $trackingNumber, ?string $shipmentReference = null): Tracker
-    {
+    public function createTracker(
+        string $trackingNumber,
+        ?string $shipmentReference = null,
+        ?string $clientTrackerId = null,
+        ?string $originCountryCode = null,
+        ?string $destinationCountryCode = null,
+        ?string $destinationPostCode = null,
+        ?string $shippingDate = null,
+        ?array $courierCode = null,
+        ?string $courierName = null,
+        ?string $trackingUrl = null,
+        ?string $orderNumber = null,
+        ?string $title = null,
+        ?string $recipientEmail = null,
+        ?string $recipientName = null,
+        ?bool $restrictTrackingToCourierCode = null,
+    ): Tracker {
         Log::info('Ship24: creating tracker', ['trackingNumber' => $trackingNumber]);
 
         try {
-            $response = $this->connector->send(new CreateTrackerRequest($trackingNumber, $shipmentReference));
+            $response = $this->connector->send(new CreateTrackerRequest(
+                trackingNumber: $trackingNumber,
+                shipmentReference: $shipmentReference,
+                clientTrackerId: $clientTrackerId,
+                originCountryCode: $originCountryCode,
+                destinationCountryCode: $destinationCountryCode,
+                destinationPostCode: $destinationPostCode,
+                shippingDate: $shippingDate,
+                courierCode: $courierCode,
+                courierName: $courierName,
+                trackingUrl: $trackingUrl,
+                orderNumber: $orderNumber,
+                title: $title,
+                recipientEmail: $recipientEmail,
+                recipientName: $recipientName,
+                restrictTrackingToCourierCode: $restrictTrackingToCourierCode,
+            ));
         } catch (RequestException $e) {
             Log::error('Ship24: createTracker failed', [
                 'trackingNumber' => $trackingNumber,
@@ -67,12 +122,57 @@ class Ship24Client
     }
 
     /**
-     * List all trackers with pagination.
-     * Returns ['trackers' => Tracker[], 'total' => int|null, 'page' => int, 'limit' => int].
+     * Fetch a single tracker by its ID (or clientTrackerId).
      *
-     * @param int      $page  Page number (minimum 1)
-     * @param int      $limit Results per page (1–500)
-     * @param int|null $sort  Sort by createdAt: 1 = ascending, -1 = descending
+     * @param  string      $trackerId  Tracker ID or clientTrackerId value
+     * @param  string|null $searchBy   'trackerId' (default) or 'clientTrackerId'
+     * @return Tracker
+     *
+     * @throws Ship24ApiException
+     */
+    public function getTracker(string $trackerId, ?string $searchBy = null): Tracker
+    {
+        Log::info('Ship24: fetching tracker', ['trackerId' => $trackerId]);
+
+        try {
+            $response = $this->connector->send(new GetTrackerRequest($trackerId, $searchBy));
+        } catch (RequestException $e) {
+            Log::error('Ship24: getTracker failed', [
+                'trackerId' => $trackerId,
+                'status'    => $e->getResponse()->status(),
+                'body'      => substr($e->getResponse()->body(), 0, 500),
+            ]);
+
+            throw new Ship24ApiException(
+                "Ship24 API returned HTTP {$e->getResponse()->status()} for getTracker: {$trackerId}",
+                $e->getResponse()->status(),
+                $e
+            );
+        } catch (\Throwable $e) {
+            Log::error('Ship24: unexpected error in getTracker', ['message' => $e->getMessage()]);
+
+            throw new Ship24ApiException("Ship24 getTracker failed: {$e->getMessage()}", 0, $e);
+        }
+
+        $data = $response->json();
+
+        if (! is_array($data)) {
+            throw new Ship24ApiException('Ship24 API returned a non-JSON response for getTracker.');
+        }
+
+        $tracker = Tracker::fromArray($data['data']['tracker'] ?? []);
+
+        Log::info('Ship24: tracker fetched', ['trackerId' => $tracker->trackerId]);
+
+        return $tracker;
+    }
+
+    /**
+     * List all trackers with pagination.
+     *
+     * @param  int      $page  Page number (minimum 1)
+     * @param  int      $limit Results per page (1–500)
+     * @param  int|null $sort  Sort by createdAt: 1 = ascending, -1 = descending
      *
      * @return array{trackers: Tracker[], total: int|null, page: int, limit: int}
      *
@@ -127,8 +227,8 @@ class Ship24Client
     /**
      * Bulk-create up to 100 trackers in a single request.
      *
-     * @param array<int, array<string, mixed>> $trackers Array of tracker-create objects.
-     *                                                    Each must have 'trackingNumber'.
+     * @param  array<int, array<string, mixed>> $trackers  Each item must contain 'trackingNumber'.
+     * @return BulkCreateResult
      *
      * @throws \InvalidArgumentException If the array is empty or exceeds 100 items.
      * @throws Ship24ApiException
@@ -170,7 +270,8 @@ class Ship24Client
             throw new Ship24ApiException('Ship24 API returned a non-JSON response for bulkCreateTrackers.');
         }
 
-        $result = BulkCreateResult::fromArray($data['data']['trackers'] ?? []);
+        // The bulk create response is at the root level (no data.trackers wrapper).
+        $result = BulkCreateResult::fromArray($data);
 
         Log::info('Ship24: bulk create completed', [
             'status'       => $result->status,
@@ -183,6 +284,15 @@ class Ship24Client
 
     /**
      * Create a tracker and immediately retrieve its tracking results in one API call.
+     *
+     * @param  string      $trackingNumber
+     * @param  string|null $shipmentReference
+     * @param  string|null $originCountryCode
+     * @param  string|null $destinationCountryCode
+     * @param  string|null $destinationPostCode
+     * @param  string|null $shippingDate
+     * @param  string[]|null $courierCode
+     * @return TrackingResult
      *
      * @throws Ship24ApiException
      */
@@ -242,14 +352,17 @@ class Ship24Client
     /**
      * Update an existing tracker's attributes.
      *
-     * @param array<string, mixed> $updates Updatable fields: isSubscribed, courierCode,
-     *                                       originCountryCode, destinationCountryCode,
-     *                                       destinationPostCode, shippingDate
+     * @param  string               $trackerId  Tracker ID or clientTrackerId value
+     * @param  array<string, mixed> $updates    Updatable fields: isSubscribed, courierCode,
+     *                                          originCountryCode, destinationCountryCode,
+     *                                          destinationPostCode, shippingDate
+     * @param  string|null          $searchBy   'trackerId' (default) or 'clientTrackerId'
+     * @return Tracker
      *
      * @throws \InvalidArgumentException If updates array is empty.
      * @throws Ship24ApiException
      */
-    public function updateTracker(string $trackerId, array $updates): Tracker
+    public function updateTracker(string $trackerId, array $updates, ?string $searchBy = null): Tracker
     {
         if (count($updates) === 0) {
             throw new \InvalidArgumentException('Ship24 updateTracker requires at least one field to update.');
@@ -258,7 +371,7 @@ class Ship24Client
         Log::info('Ship24: updating tracker', ['trackerId' => $trackerId, 'fields' => array_keys($updates)]);
 
         try {
-            $response = $this->connector->send(new UpdateTrackerRequest($trackerId, $updates));
+            $response = $this->connector->send(new UpdateTrackerRequest($trackerId, $updates, $searchBy));
         } catch (RequestException $e) {
             Log::error('Ship24: updateTracker failed', [
                 'trackerId' => $trackerId,
@@ -291,9 +404,58 @@ class Ship24Client
     }
 
     /**
-     * Get tracking results for an existing tracker by its tracking number.
-     * Useful when you have the tracking number but not the tracker ID.
+     * Get tracking results for an existing tracker by its ID.
      *
+     * @param  string      $trackerId  Tracker ID or clientTrackerId value
+     * @param  string|null $searchBy   'trackerId' (default) or 'clientTrackerId'
+     * @return TrackingResult[]
+     *
+     * @throws Ship24ApiException
+     */
+    public function getTrackingResults(string $trackerId, ?string $searchBy = null): array
+    {
+        Log::info('Ship24: fetching tracking results', ['trackerId' => $trackerId]);
+
+        try {
+            $response = $this->connector->send(new GetTrackingResultsRequest($trackerId, $searchBy));
+        } catch (RequestException $e) {
+            Log::error('Ship24: getTrackingResults failed', [
+                'trackerId' => $trackerId,
+                'status'    => $e->getResponse()->status(),
+                'body'      => substr($e->getResponse()->body(), 0, 500),
+            ]);
+
+            throw new Ship24ApiException(
+                "Ship24 API returned HTTP {$e->getResponse()->status()} for getTrackingResults: {$trackerId}",
+                $e->getResponse()->status(),
+                $e
+            );
+        } catch (\Throwable $e) {
+            Log::error('Ship24: unexpected error in getTrackingResults', ['message' => $e->getMessage()]);
+
+            throw new Ship24ApiException("Ship24 getTrackingResults failed: {$e->getMessage()}", 0, $e);
+        }
+
+        $data = $response->json();
+
+        if (! is_array($data)) {
+            throw new Ship24ApiException('Ship24 API returned a non-JSON response for getTrackingResults.');
+        }
+
+        $results = array_map(
+            static fn (array $item) => TrackingResult::fromArray($item),
+            $data['data']['trackings'] ?? []
+        );
+
+        Log::info('Ship24: tracking results fetched', ['trackerId' => $trackerId, 'count' => count($results)]);
+
+        return $results;
+    }
+
+    /**
+     * Get tracking results for existing trackers by tracking number.
+     *
+     * @param  string $trackingNumber
      * @return TrackingResult[]
      *
      * @throws Ship24ApiException
@@ -342,56 +504,9 @@ class Ship24Client
     }
 
     /**
-     * Get the latest tracking results for an existing tracker by its ID.
+     * Instantly search for tracking info by tracking number (per-call plan, no persistent tracker).
      *
-     * @return TrackingResult[]
-     *
-     * @throws Ship24ApiException
-     */
-    public function getTrackingResults(string $trackerId): array
-    {
-        Log::info('Ship24: fetching tracking results', ['trackerId' => $trackerId]);
-
-        try {
-            $response = $this->connector->send(new GetTrackingResultsRequest($trackerId));
-        } catch (RequestException $e) {
-            Log::error('Ship24: getTrackingResults failed', [
-                'trackerId' => $trackerId,
-                'status'    => $e->getResponse()->status(),
-                'body'      => substr($e->getResponse()->body(), 0, 500),
-            ]);
-
-            throw new Ship24ApiException(
-                "Ship24 API returned HTTP {$e->getResponse()->status()} for getTrackingResults: {$trackerId}",
-                $e->getResponse()->status(),
-                $e
-            );
-        } catch (\Throwable $e) {
-            Log::error('Ship24: unexpected error in getTrackingResults', ['message' => $e->getMessage()]);
-
-            throw new Ship24ApiException("Ship24 getTrackingResults failed: {$e->getMessage()}", 0, $e);
-        }
-
-        $data = $response->json();
-
-        if (! is_array($data)) {
-            throw new Ship24ApiException('Ship24 API returned a non-JSON response for getTrackingResults.');
-        }
-
-        $results = array_map(
-            static fn (array $item) => TrackingResult::fromArray($item),
-            $data['data']['trackings'] ?? []
-        );
-
-        Log::info('Ship24: tracking results fetched', ['trackerId' => $trackerId, 'count' => count($results)]);
-
-        return $results;
-    }
-
-    /**
-     * Instantly search for tracking info by tracking number (no tracker ID required).
-     * Uses the per-call plan endpoint — does not create a persistent tracker.
-     *
+     * @param  string $trackingNumber
      * @return TrackingResult[]
      *
      * @throws Ship24ApiException

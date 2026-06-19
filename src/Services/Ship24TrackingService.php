@@ -10,12 +10,23 @@ use GraystackIT\Ship24\Ship24Client;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * Synchronises Ship24 API tracking results with local Ship24Tracking records.
+ */
 class Ship24TrackingService
 {
+    /**
+     * @param Ship24Client $client
+     */
     public function __construct(private readonly Ship24Client $client) {}
 
     /**
      * Create or update a Ship24Tracking record for a given trackable model, then persist API results.
+     *
+     * @param  Model          $trackable
+     * @param  string         $trackingNumber
+     * @param  TrackingResult $result
+     * @return Ship24Tracking
      */
     public function createOrUpdateFromResult(
         Model $trackable,
@@ -37,22 +48,30 @@ class Ship24TrackingService
     /**
      * Apply a TrackingResult to a Ship24Tracking record and persist it.
      * Respects config('ship24.tracking_mode'): 'latest' clears events, 'history' stores them.
+     *
+     * @param  Ship24Tracking $tracking
+     * @param  TrackingResult $result
+     * @return void
      */
     public function applyResult(Ship24Tracking $tracking, TrackingResult $result): void
     {
         $shipment = $result->shipment;
         $latest   = $result->latestEvent();
 
-        $tracking->tracker_id       = $result->tracker->trackerId;
-        $tracking->carrier_id       = $shipment->currentCourierId;
-        $tracking->carrier_name     = $shipment->currentCourierName;
+        $tracking->tracker_id = $result->tracker->trackerId;
+
+        // Derive carrier from the latest event's courierCode, falling back to the tracker's own courierCode.
+        $tracking->carrier_id   = $latest?->courierCode ?? ($result->tracker->courierCode[0] ?? null);
+        $tracking->carrier_name = null;
+
         $tracking->status_code      = $shipment->statusCode;
         $tracking->status_category  = $shipment->statusCategory;
         $tracking->status_milestone = $shipment->statusMilestone;
         $tracking->raw_shipment     = $shipment->toArray();
 
         if ($latest !== null) {
-            $tracking->latest_event_at       = $latest->datetime;
+            // occurrenceDatetime is the canonical field; datetime is deprecated but kept as fallback.
+            $tracking->latest_event_at       = $latest->occurrenceDatetime ?? $latest->datetime;
             $tracking->latest_event_status   = $latest->status;
             $tracking->latest_event_location = $latest->location;
         }
@@ -71,6 +90,11 @@ class Ship24TrackingService
 
     /**
      * Re-fetch tracking data from the Ship24 API and update the local record.
+     *
+     * @param  Ship24Tracking $tracking
+     * @return Ship24Tracking
+     *
+     * @throws \GraystackIT\Ship24\Exceptions\Ship24ApiException
      */
     public function refresh(Ship24Tracking $tracking): Ship24Tracking
     {

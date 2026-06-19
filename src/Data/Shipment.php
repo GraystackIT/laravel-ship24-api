@@ -4,42 +4,62 @@ declare(strict_types=1);
 
 namespace GraystackIT\Ship24\Data;
 
+/**
+ * Represents a shipment object from the Ship24 API tracking result.
+ */
 class Shipment
 {
+    /**
+     * @param string|null   $shipmentId             Ship24 internal shipment ID
+     * @param string|null   $statusCode             Normalised status code
+     * @param string|null   $statusCategory         Status category
+     * @param string|null   $statusMilestone        Milestone slug
+     * @param string|null   $originCountryCode      ISO 3166-1 alpha-2 origin country
+     * @param string|null   $destinationCountryCode ISO 3166-1 alpha-2 destination country
+     * @param Delivery|null $delivery               Delivery window and service details
+     * @param array<int, array<string, string>> $trackingNumbers All tracking numbers linked to this shipment
+     * @param Recipient|null $recipient             Recipient address details
+     */
     public function __construct(
-        public readonly string $shipmentId,
-        public readonly string $trackingNumber,
-        public readonly ?string $slug,
-        public readonly ?string $currentCourierId,
-        public readonly ?string $currentCourierName,
-        public readonly ?string $originCountryCode,
-        public readonly ?string $destinationCountryCode,
-        public readonly ?string $deliveryEstimate,
+        public readonly ?string $shipmentId,
         public readonly ?string $statusCode,
         public readonly ?string $statusCategory,
         public readonly ?string $statusMilestone,
-        /** @var string[] */
-        public readonly array $courierIds,
+        public readonly ?string $originCountryCode,
+        public readonly ?string $destinationCountryCode,
+        public readonly ?Delivery $delivery,
+        public readonly array $trackingNumbers,
+        public readonly ?Recipient $recipient,
     ) {}
 
     /**
-     * @param array<string, mixed> $item
+     * @param  array<string, mixed> $item
+     * @return self
      */
     public static function fromArray(array $item): self
     {
+        $delivery = isset($item['delivery']) && is_array($item['delivery'])
+            ? Delivery::fromArray($item['delivery'])
+            : null;
+
+        $recipient = isset($item['recipient']) && is_array($item['recipient'])
+            ? Recipient::fromArray($item['recipient'])
+            : null;
+
+        $trackingNumbers = array_values(
+            array_filter((array) ($item['trackingNumbers'] ?? []), static fn ($v) => is_array($v))
+        );
+
         return new self(
-            shipmentId: (string) ($item['shipmentId'] ?? ''),
-            trackingNumber: (string) ($item['trackingNumber'] ?? ''),
-            slug: isset($item['slug']) ? (string) $item['slug'] : null,
-            currentCourierId: isset($item['currentCourierId']) ? (string) $item['currentCourierId'] : null,
-            currentCourierName: isset($item['currentCourierName']) ? (string) $item['currentCourierName'] : null,
-            originCountryCode: isset($item['originCountryCode']) ? (string) $item['originCountryCode'] : null,
-            destinationCountryCode: isset($item['destinationCountryCode']) ? (string) $item['destinationCountryCode'] : null,
-            deliveryEstimate: isset($item['deliveryEstimate']) ? (string) $item['deliveryEstimate'] : null,
+            shipmentId: isset($item['shipmentId']) ? (string) $item['shipmentId'] : null,
             statusCode: isset($item['statusCode']) ? (string) $item['statusCode'] : null,
             statusCategory: isset($item['statusCategory']) ? (string) $item['statusCategory'] : null,
             statusMilestone: isset($item['statusMilestone']) ? (string) $item['statusMilestone'] : null,
-            courierIds: (array) ($item['courierIds'] ?? []),
+            originCountryCode: isset($item['originCountryCode']) ? (string) $item['originCountryCode'] : null,
+            destinationCountryCode: isset($item['destinationCountryCode']) ? (string) $item['destinationCountryCode'] : null,
+            delivery: $delivery,
+            trackingNumbers: $trackingNumbers,
+            recipient: $recipient,
         );
     }
 
@@ -50,17 +70,14 @@ class Shipment
     {
         return [
             'shipmentId'             => $this->shipmentId,
-            'trackingNumber'         => $this->trackingNumber,
-            'slug'                   => $this->slug,
-            'currentCourierId'       => $this->currentCourierId,
-            'currentCourierName'     => $this->currentCourierName,
-            'originCountryCode'      => $this->originCountryCode,
-            'destinationCountryCode' => $this->destinationCountryCode,
-            'deliveryEstimate'       => $this->deliveryEstimate,
             'statusCode'             => $this->statusCode,
             'statusCategory'         => $this->statusCategory,
             'statusMilestone'        => $this->statusMilestone,
-            'courierIds'             => $this->courierIds,
+            'originCountryCode'      => $this->originCountryCode,
+            'destinationCountryCode' => $this->destinationCountryCode,
+            'delivery'               => $this->delivery?->toArray(),
+            'trackingNumbers'        => $this->trackingNumbers,
+            'recipient'              => $this->recipient?->toArray(),
         ];
     }
 }

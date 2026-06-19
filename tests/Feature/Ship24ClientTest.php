@@ -10,6 +10,7 @@ use GraystackIT\Ship24\Exceptions\Ship24ApiException;
 use GraystackIT\Ship24\Requests\BulkCreateTrackersRequest;
 use GraystackIT\Ship24\Requests\CreateAndTrackRequest;
 use GraystackIT\Ship24\Requests\CreateTrackerRequest;
+use GraystackIT\Ship24\Requests\GetTrackerRequest;
 use GraystackIT\Ship24\Requests\GetTrackingByTrackingNumberRequest;
 use GraystackIT\Ship24\Requests\GetTrackingResultsRequest;
 use GraystackIT\Ship24\Requests\ListTrackersRequest;
@@ -27,6 +28,8 @@ function makeTracker(string $id = 'trk_abc123', string $number = '1Z999AA1012345
         'trackerId'           => $id,
         'trackingNumber'      => $number,
         'shipmentReference'   => null,
+        'clientTrackerId'     => null,
+        'courierCode'         => [],
         'createdAt'           => '2024-01-01T00:00:00Z',
         'isSubscribed'        => true,
         'isTracked'           => true,
@@ -38,13 +41,14 @@ function makeShipment(string $number = '1Z999AA10123456784'): array
 {
     return [
         'shipmentId'             => 'shp_xyz',
-        'trackingNumber'         => $number,
         'statusCode'             => 'delivery_delivered',
         'statusCategory'         => 'Delivered',
         'statusMilestone'        => 'delivered',
         'originCountryCode'      => 'US',
         'destinationCountryCode' => 'DE',
-        'courierIds'             => ['ups'],
+        'trackingNumbers'        => [['tn' => $number]],
+        'delivery'               => null,
+        'recipient'              => null,
     ];
 }
 
@@ -55,13 +59,14 @@ function makeTracking(string $trackerId = 'trk_abc123', string $number = '1Z999A
         'shipment' => makeShipment($number),
         'events'   => [
             [
-                'eventId'        => 'evt_1',
-                'trackingNumber' => $number,
-                'datetime'       => '2024-01-10T12:00:00Z',
-                'status'         => 'Delivered',
-                'statusCode'     => 'delivery_delivered',
-                'statusCategory' => 'Delivered',
-                'location'       => 'Berlin, DE',
+                'eventId'            => 'evt_1',
+                'trackingNumber'     => $number,
+                'occurrenceDatetime' => '2024-01-10T12:00:00Z',
+                'datetime'           => '2024-01-10T12:00:00Z',
+                'status'             => 'Delivered',
+                'statusCode'         => 'delivery_delivered',
+                'statusCategory'     => 'Delivered',
+                'location'           => 'Berlin, DE',
             ],
         ],
     ];
@@ -78,7 +83,7 @@ it('is resolved from the container', function () {
 it('creates a tracker and returns a Tracker object', function () {
     $mockClient = new MockClient([
         CreateTrackerRequest::class => MockResponse::make([
-            'data' => ['tracker' => makeTracker('trk_abc123', '1Z999AA10123456784') + ['shipmentReference' => 'ORDER-001']],
+            'data' => ['tracker' => array_merge(makeTracker('trk_abc123', '1Z999AA10123456784'), ['shipmentReference' => 'ORDER-001'])],
         ], 200),
     ]);
 
@@ -94,6 +99,35 @@ it('creates a tracker and returns a Tracker object', function () {
         ->and($tracker->isTracked)->toBeTrue();
 });
 
+it('creates a tracker with all optional parameters', function () {
+    $trackerData = array_merge(makeTracker('trk_full', 'FULLNUM'), [
+        'clientTrackerId' => 'my-ref-001',
+        'courierCode'     => ['ups'],
+    ]);
+
+    $mockClient = new MockClient([
+        CreateTrackerRequest::class => MockResponse::make([
+            'data' => ['tracker' => $trackerData],
+        ], 200),
+    ]);
+
+    $connector = app(Ship24Connector::class);
+    $connector->withMockClient($mockClient);
+
+    $tracker = (new Ship24Client($connector))->createTracker(
+        trackingNumber: 'FULLNUM',
+        clientTrackerId: 'my-ref-001',
+        originCountryCode: 'US',
+        destinationCountryCode: 'DE',
+        courierCode: ['ups'],
+        recipientName: 'John Doe',
+    );
+
+    expect($tracker)->toBeInstanceOf(Tracker::class)
+        ->and($tracker->clientTrackerId)->toBe('my-ref-001')
+        ->and($tracker->courierCode)->toBe(['ups']);
+});
+
 it('throws Ship24ApiException on 401 for createTracker', function () {
     $mockClient = new MockClient([
         CreateTrackerRequest::class => MockResponse::make(['error' => 'Unauthorized'], 401),
@@ -103,6 +137,53 @@ it('throws Ship24ApiException on 401 for createTracker', function () {
     $connector->withMockClient($mockClient);
 
     expect(fn () => (new Ship24Client($connector))->createTracker('INVALID'))
+        ->toThrow(Ship24ApiException::class);
+});
+
+// ── getTracker ────────────────────────────────────────────────────────────────
+
+it('fetches a single tracker by ID', function () {
+    $mockClient = new MockClient([
+        GetTrackerRequest::class => MockResponse::make([
+            'data' => ['tracker' => makeTracker('trk_abc123')],
+        ], 200),
+    ]);
+
+    $connector = app(Ship24Connector::class);
+    $connector->withMockClient($mockClient);
+
+    $tracker = (new Ship24Client($connector))->getTracker('trk_abc123');
+
+    expect($tracker)->toBeInstanceOf(Tracker::class)
+        ->and($tracker->trackerId)->toBe('trk_abc123')
+        ->and($tracker->trackingNumber)->toBe('1Z999AA10123456784');
+});
+
+it('fetches a tracker by clientTrackerId when searchBy is set', function () {
+    $mockClient = new MockClient([
+        GetTrackerRequest::class => MockResponse::make([
+            'data' => ['tracker' => array_merge(makeTracker('trk_abc123'), ['clientTrackerId' => 'my-ref-001'])],
+        ], 200),
+    ]);
+
+    $connector = app(Ship24Connector::class);
+    $connector->withMockClient($mockClient);
+
+    $tracker = (new Ship24Client($connector))->getTracker('my-ref-001', 'clientTrackerId');
+
+    expect($tracker)->toBeInstanceOf(Tracker::class)
+        ->and($tracker->clientTrackerId)->toBe('my-ref-001');
+});
+
+it('throws Ship24ApiException on 404 for getTracker', function () {
+    $mockClient = new MockClient([
+        GetTrackerRequest::class => MockResponse::make(['error' => 'Not Found'], 404),
+    ]);
+
+    $connector = app(Ship24Connector::class);
+    $connector->withMockClient($mockClient);
+
+    expect(fn () => (new Ship24Client($connector))->getTracker('trk_missing'))
         ->toThrow(Ship24ApiException::class);
 });
 
@@ -162,15 +243,11 @@ it('throws Ship24ApiException on 401 for listTrackers', function () {
 it('bulk creates trackers and returns BulkCreateResult', function () {
     $mockClient = new MockClient([
         BulkCreateTrackersRequest::class => MockResponse::make([
-            'data' => [
-                'trackers' => [
-                    'status'  => 'success',
-                    'summary' => ['requested' => 2, 'success' => 2, 'error' => 0],
-                    'items'   => [
-                        ['itemStatus' => 'created', 'tracker' => makeTracker('trk_1', 'NUM1'), 'errors' => []],
-                        ['itemStatus' => 'created', 'tracker' => makeTracker('trk_2', 'NUM2'), 'errors' => []],
-                    ],
-                ],
+            'status'  => 'success',
+            'summary' => ['totalInputs' => 2, 'totalCreated' => 2, 'totalExisting' => 0, 'totalErrors' => 0],
+            'data'    => [
+                ['itemStatus' => 'created', 'tracker' => makeTracker('trk_1', 'NUM1'), 'errors' => []],
+                ['itemStatus' => 'created', 'tracker' => makeTracker('trk_2', 'NUM2'), 'errors' => []],
             ],
         ], 200),
     ]);
@@ -187,6 +264,7 @@ it('bulk creates trackers and returns BulkCreateResult', function () {
         ->and($result->status)->toBe('success')
         ->and($result->requested)->toBe(2)
         ->and($result->successCount)->toBe(2)
+        ->and($result->existingCount)->toBe(0)
         ->and($result->errorCount)->toBe(0)
         ->and($result->items)->toHaveCount(2)
         ->and($result->items[0]->success)->toBeTrue()
@@ -197,15 +275,11 @@ it('bulk creates trackers and returns BulkCreateResult', function () {
 it('handles partial bulk create with errors', function () {
     $mockClient = new MockClient([
         BulkCreateTrackersRequest::class => MockResponse::make([
-            'data' => [
-                'trackers' => [
-                    'status'  => 'partial',
-                    'summary' => ['requested' => 2, 'success' => 1, 'error' => 1],
-                    'items'   => [
-                        ['itemStatus' => 'created', 'tracker' => makeTracker('trk_1', 'NUM1'), 'errors' => []],
-                        ['itemStatus' => 'error', 'tracker' => null, 'errors' => [['code' => '400', 'message' => 'Invalid tracking number']]],
-                    ],
-                ],
+            'status'  => 'partial',
+            'summary' => ['totalInputs' => 2, 'totalCreated' => 1, 'totalExisting' => 0, 'totalErrors' => 1],
+            'data'    => [
+                ['itemStatus' => 'created', 'tracker' => makeTracker('trk_1', 'NUM1'), 'errors' => []],
+                ['itemStatus' => 'error', 'tracker' => null, 'errors' => [['code' => '400', 'message' => 'Invalid tracking number']]],
             ],
         ], 200),
     ]);
@@ -224,6 +298,30 @@ it('handles partial bulk create with errors', function () {
         ->and($result->items[1]->success)->toBeFalse()
         ->and($result->items[1]->tracker)->toBeNull()
         ->and($result->items[1]->errorMessage)->toBe('Invalid tracking number');
+});
+
+it('reports existing trackers in bulk create result', function () {
+    $mockClient = new MockClient([
+        BulkCreateTrackersRequest::class => MockResponse::make([
+            'status'  => 'success',
+            'summary' => ['totalInputs' => 2, 'totalCreated' => 1, 'totalExisting' => 1, 'totalErrors' => 0],
+            'data'    => [
+                ['itemStatus' => 'created', 'tracker' => makeTracker('trk_1', 'NUM1'), 'errors' => []],
+                ['itemStatus' => 'existing', 'tracker' => makeTracker('trk_2', 'NUM2'), 'errors' => []],
+            ],
+        ], 200),
+    ]);
+
+    $connector = app(Ship24Connector::class);
+    $connector->withMockClient($mockClient);
+
+    $result = (new Ship24Client($connector))->bulkCreateTrackers([
+        ['trackingNumber' => 'NUM1'],
+        ['trackingNumber' => 'NUM2'],
+    ]);
+
+    expect($result->existingCount)->toBe(1)
+        ->and($result->successCount)->toBe(1);
 });
 
 it('throws InvalidArgumentException when bulk create receives empty array', function () {
@@ -279,7 +377,7 @@ it('createAndTrack result carries statistics when present', function () {
     $mockClient = new MockClient([
         CreateAndTrackRequest::class => MockResponse::make([
             'data' => [
-                'trackings' => [makeTracking() + ['statistics' => ['transitDays' => 5]]],
+                'trackings' => [array_merge(makeTracking(), ['statistics' => ['transitDays' => 5]])],
             ],
         ], 200),
     ]);
@@ -322,6 +420,24 @@ it('updates tracker and returns updated Tracker', function () {
 
     expect($tracker)->toBeInstanceOf(Tracker::class)
         ->and($tracker->trackerId)->toBe('trk_abc123')
+        ->and($tracker->isSubscribed)->toBeFalse();
+});
+
+it('updates tracker by clientTrackerId when searchBy is set', function () {
+    $updated = array_merge(makeTracker(), ['clientTrackerId' => 'my-ref-001', 'isSubscribed' => false]);
+
+    $mockClient = new MockClient([
+        UpdateTrackerRequest::class => MockResponse::make([
+            'data' => ['tracker' => $updated],
+        ], 200),
+    ]);
+
+    $connector = app(Ship24Connector::class);
+    $connector->withMockClient($mockClient);
+
+    $tracker = (new Ship24Client($connector))->updateTracker('my-ref-001', ['isSubscribed' => false], 'clientTrackerId');
+
+    expect($tracker)->toBeInstanceOf(Tracker::class)
         ->and($tracker->isSubscribed)->toBeFalse();
 });
 
@@ -411,6 +527,40 @@ it('returns TrackingResult array for getTrackingResults', function () {
         ->and($results[0]->latestEvent()->status)->toBe('Delivered');
 });
 
+it('returns tracking results using occurrenceDatetime as the primary timestamp', function () {
+    $tracking = makeTracking();
+    $tracking['events'][0]['occurrenceDatetime'] = '2024-01-10T14:30:00Z';
+
+    $mockClient = new MockClient([
+        GetTrackingResultsRequest::class => MockResponse::make([
+            'data' => ['trackings' => [$tracking]],
+        ], 200),
+    ]);
+
+    $connector = app(Ship24Connector::class);
+    $connector->withMockClient($mockClient);
+
+    $results = (new Ship24Client($connector))->getTrackingResults('trk_abc123');
+
+    expect($results[0]->latestEvent()->occurrenceDatetime)->toBe('2024-01-10T14:30:00Z');
+});
+
+it('returns tracking results by clientTrackerId when searchBy is set', function () {
+    $mockClient = new MockClient([
+        GetTrackingResultsRequest::class => MockResponse::make([
+            'data' => ['trackings' => [makeTracking()]],
+        ], 200),
+    ]);
+
+    $connector = app(Ship24Connector::class);
+    $connector->withMockClient($mockClient);
+
+    $results = (new Ship24Client($connector))->getTrackingResults('my-ref-001', 'clientTrackerId');
+
+    expect($results)->toHaveCount(1)
+        ->and($results[0])->toBeInstanceOf(TrackingResult::class);
+});
+
 it('returns empty array when trackings key is absent for getTrackingResults', function () {
     $mockClient = new MockClient([
         GetTrackingResultsRequest::class => MockResponse::make(['data' => []], 200),
@@ -447,11 +597,12 @@ it('returns TrackingResult array for searchByTrackingNumber', function () {
                         'tracker'  => makeTracker('trk_search1', 'JD014600006228974097'),
                         'shipment' => [
                             'shipmentId'      => 'shp_s1',
-                            'trackingNumber'  => 'JD014600006228974097',
                             'statusMilestone' => 'in_transit',
                             'statusCategory'  => 'InTransit',
                             'statusCode'      => 'in_transit',
-                            'courierIds'      => ['dhl'],
+                            'trackingNumbers' => [['tn' => 'JD014600006228974097']],
+                            'delivery'        => null,
+                            'recipient'       => null,
                         ],
                         'events'   => [],
                     ],
