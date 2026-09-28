@@ -137,11 +137,19 @@ Creates a tracker and immediately returns its tracking results without a second 
 $result = $client->createAndTrack(
     trackingNumber:        '1Z999AA10123456784',
     shipmentReference:     'ORDER-001',       // optional
+    clientTrackerId:       'my-ref-001',      // optional
     originCountryCode:     'US',              // optional
     destinationCountryCode: 'DE',             // optional
     destinationPostCode:   '10115',           // optional
     shippingDate:          '2024-06-01',      // optional (YYYY-MM-DD)
     courierCode:           ['ups'],           // optional (max 3)
+    courierName:           'UPS Standard',    // optional
+    trackingUrl:           'https://example.com/track', // optional
+    orderNumber:           'ORDER-001',       // optional
+    title:                 'Nike shoes for Marc', // optional
+    recipientEmail:        'recipient@email.com', // optional
+    recipientName:         'Marc',            // optional
+    restrictTrackingToCourierCode: true,      // optional
 );
 
 echo $result->tracker->trackerId;
@@ -164,12 +172,17 @@ $tracker = $client->updateTracker('trk_abc123', [
     'destinationPostCode'   => '10115',
     'shippingDate'          => '2024-06-01',
     'courierCode'           => ['ups'],
+    'courierName'           => 'UPS Standard',
+    'trackingUrl'           => 'https://example.com/track',
+    'recipient'             => ['name' => 'Marc'], // only recipient.name is patchable
 ]);
 
 echo $tracker->isSubscribed; // false
 ```
 
-Throws `\InvalidArgumentException` if the updates array is empty.
+Throws `\InvalidArgumentException` if the updates array is empty. Once a tracker has gathered
+shipment data, `courierCode`, `originCountryCode`, `destinationCountryCode`, and `shippingDate`
+can no longer be changed.
 
 ---
 
@@ -195,11 +208,11 @@ $results = $client->getTrackingResultsByTrackingNumber('1Z999AA10123456784');
 
 foreach ($results as $result) {
     echo $result->tracker->trackerId;
-    echo $result->shipment->currentCourierName;
+    echo implode(', ', $result->tracker->courierCode);
     echo $result->shipment->originCountryCode;
 
     foreach ($result->events as $event) {
-        echo $event->datetime . ' — ' . $event->status . ' — ' . $event->location;
+        echo $event->occurrenceDatetime . ' — ' . $event->status . ' — ' . $event->location;
     }
 }
 ```
@@ -211,19 +224,27 @@ foreach ($results as $result) {
 One-shot search without creating a persistent tracker. No tracker ID required:
 
 ```php
-$results = $client->searchByTrackingNumber('JD014600006228974097');
+$results = $client->searchByTrackingNumber(
+    trackingNumber:          'JD014600006228974097',
+    originCountryCode:       'CN',             // optional — recommended for accuracy
+    destinationCountryCode:  'US',             // optional — recommended for accuracy
+    destinationPostCode:     '94901',          // optional — recommended for accuracy
+    shippingDate:            '2024-06-01',     // optional — recommended for accuracy
+    courierCode:             ['us-post'],      // optional (max 3) — recommended for accuracy
+);
 
 foreach ($results as $result) {
-    echo $result->shipment->currentCourierName;
     echo $result->shipment->originCountryCode;
 
     foreach ($result->events as $event) {
-        echo $event->datetime . ' - ' . $event->status . ' - ' . $event->location;
+        echo $event->occurrenceDatetime . ' - ' . $event->status . ' - ' . $event->location;
     }
 }
 ```
 
-> **Note:** This uses the `/tracking/search` per-call endpoint — it does not create a persistent tracker and response time may be up to 1 minute.
+> **Note:** This uses the `/tracking/search` per-call endpoint (requires an active "Per-call"
+> subscription) — it does not create a persistent tracker, so `$result->tracker` is always
+> empty here, and response time may be up to 1 minute.
 
 ---
 
@@ -318,9 +339,10 @@ php artisan ship24:refresh 42
 
 | Class | Key properties |
 |---|---|
-| `Tracker` | `trackerId`, `trackingNumber`, `shipmentReference`, `isSubscribed`, `isTracked`, `createdAt` |
-| `Shipment` | `shipmentId`, `trackingNumber`, `statusCode`, `statusCategory`, `statusMilestone`, `originCountryCode`, `destinationCountryCode`, `courierIds` |
-| `TrackingEvent` | `eventId`, `trackingNumber`, `datetime`, `status`, `statusCode`, `statusCategory`, `statusMilestone`, `location` |
+| `Tracker` | `trackerId`, `trackingNumber`, `shipmentReference`, `clientTrackerId`, `courierCode[]`, `isSubscribed`, `isTracked`, `createdAt` |
+| `Shipment` | `shipmentId`, `statusCode`, `statusCategory`, `statusMilestone`, `originCountryCode`, `destinationCountryCode`, `delivery`, `trackingNumbers[]`, `recipient` |
+| `Delivery` | `estimatedDeliveryDate`, `courierEstimatedFrom`/`To`, `service`, `signedBy` (deprecated by Ship24), `aiPredictiveDeliveryFrom`/`To` (add-on only) |
+| `TrackingEvent` | `eventId`, `trackingNumber`, `occurrenceDatetime` (primary), `status`, `statusCode`, `statusCategory`, `statusMilestone`, `location`, `courierCode`, `sourceCode` |
 | `TrackingResult` | `tracker`, `shipment`, `events[]`, `statistics`, `latestEvent()` |
 | `BulkCreateResult` | `status`, `requested`, `successCount`, `errorCount`, `items[]` |
 | `BulkCreateItem` | `success`, `tracker`, `errorCode`, `errorMessage` |

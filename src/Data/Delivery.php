@@ -12,7 +12,10 @@ class Delivery
      * @param string|null $courierEstimatedFrom         Start of the courier's estimated window
      * @param string|null $courierEstimatedTo           End of the courier's estimated window
      * @param string|null $service                      Name of the logistics service/product
-     * @param string|null $signedBy                     Name of the person who signed on delivery
+     * @param string|null $signedBy                     Name of the person who signed on delivery (deprecated by Ship24)
+     * @param string|null $aiPredictiveDeliveryFrom      Earliest AI-predicted delivery date; requires the
+     *                                                   AI Predictive Delivery Date add-on, absent otherwise
+     * @param string|null $aiPredictiveDeliveryTo        Latest AI-predicted delivery date; same add-on requirement
      */
     public function __construct(
         public readonly ?string $estimatedDeliveryDate,
@@ -20,6 +23,8 @@ class Delivery
         public readonly ?string $courierEstimatedTo,
         public readonly ?string $service,
         public readonly ?string $signedBy,
+        public readonly ?string $aiPredictiveDeliveryFrom = null,
+        public readonly ?string $aiPredictiveDeliveryTo = null,
     ) {}
 
     /**
@@ -31,12 +36,18 @@ class Delivery
             ? $item['courierEstimatedDeliveryDate']
             : [];
 
+        $aiPredictive = isset($item['aiPredictiveDeliveryDate']) && is_array($item['aiPredictiveDeliveryDate'])
+            ? $item['aiPredictiveDeliveryDate']
+            : [];
+
         return new self(
             estimatedDeliveryDate: isset($item['estimatedDeliveryDate']) ? (string) $item['estimatedDeliveryDate'] : null,
             courierEstimatedFrom: isset($courierEst['from']) ? (string) $courierEst['from'] : null,
             courierEstimatedTo: isset($courierEst['to']) ? (string) $courierEst['to'] : null,
             service: isset($item['service']) ? (string) $item['service'] : null,
             signedBy: isset($item['signedBy']) ? (string) $item['signedBy'] : null,
+            aiPredictiveDeliveryFrom: isset($aiPredictive['from']) ? (string) $aiPredictive['from'] : null,
+            aiPredictiveDeliveryTo: isset($aiPredictive['to']) ? (string) $aiPredictive['to'] : null,
         );
     }
 
@@ -53,6 +64,10 @@ class Delivery
             ],
             'service'  => $this->service,
             'signedBy' => $this->signedBy,
+            'aiPredictiveDeliveryDate' => [
+                'from' => $this->aiPredictiveDeliveryFrom,
+                'to'   => $this->aiPredictiveDeliveryTo,
+            ],
         ];
     }
 }

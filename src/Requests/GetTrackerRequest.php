@@ -28,7 +28,7 @@ class GetTrackerRequest extends Request
      */
     public function resolveEndpoint(): string
     {
-        return '/trackers/'.$this->trackerId;
+        return '/trackers/'.rawurlencode($this->trackerId);
     }
 
     /**

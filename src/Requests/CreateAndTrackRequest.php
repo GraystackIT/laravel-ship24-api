@@ -15,15 +15,25 @@ class CreateAndTrackRequest extends Request implements HasBody
 
     protected Method $method = Method::POST;
 
+    /**
+     * @param  string[]|null  $courierCode  Up to 3 courier codes
+     */
     public function __construct(
         private readonly string $trackingNumber,
         private readonly ?string $shipmentReference = null,
+        private readonly ?string $clientTrackerId = null,
         private readonly ?string $originCountryCode = null,
         private readonly ?string $destinationCountryCode = null,
         private readonly ?string $destinationPostCode = null,
         private readonly ?string $shippingDate = null,
-        /** @var string[]|null */
         private readonly ?array $courierCode = null,
+        private readonly ?string $courierName = null,
+        private readonly ?string $trackingUrl = null,
+        private readonly ?string $orderNumber = null,
+        private readonly ?string $title = null,
+        private readonly ?string $recipientEmail = null,
+        private readonly ?string $recipientName = null,
+        private readonly ?bool $restrictTrackingToCourierCode = null,
     ) {}
 
     public function resolveEndpoint(): string
@@ -37,6 +47,10 @@ class CreateAndTrackRequest extends Request implements HasBody
 
         if ($this->shipmentReference !== null) {
             $body['shipmentReference'] = $this->shipmentReference;
+        }
+
+        if ($this->clientTrackerId !== null) {
+            $body['clientTrackerId'] = $this->clientTrackerId;
         }
 
         if ($this->originCountryCode !== null) {
@@ -57,6 +71,40 @@ class CreateAndTrackRequest extends Request implements HasBody
 
         if ($this->courierCode !== null) {
             $body['courierCode'] = $this->courierCode;
+        }
+
+        if ($this->courierName !== null) {
+            $body['courierName'] = $this->courierName;
+        }
+
+        if ($this->trackingUrl !== null) {
+            $body['trackingUrl'] = $this->trackingUrl;
+        }
+
+        if ($this->orderNumber !== null) {
+            $body['orderNumber'] = $this->orderNumber;
+        }
+
+        if ($this->title !== null) {
+            $body['title'] = $this->title;
+        }
+
+        $recipient = [];
+
+        if ($this->recipientEmail !== null) {
+            $recipient['email'] = $this->recipientEmail;
+        }
+
+        if ($this->recipientName !== null) {
+            $recipient['name'] = $this->recipientName;
+        }
+
+        if ($recipient !== []) {
+            $body['recipient'] = $recipient;
+        }
+
+        if ($this->restrictTrackingToCourierCode !== null) {
+            $body['settings'] = ['restrictTrackingToCourierCode' => $this->restrictTrackingToCourierCode];
         }
 
         return $body;

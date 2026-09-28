@@ -15,6 +15,6 @@ class GetTrackingByTrackingNumberRequest extends Request
 
     public function resolveEndpoint(): string
     {
-        return '/trackers/search/'.$this->trackingNumber.'/results';
+        return '/trackers/search/'.rawurlencode($this->trackingNumber).'/results';
     }
 }

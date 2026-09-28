@@ -28,7 +28,7 @@ class GetTrackingResultsRequest extends Request
      */
     public function resolveEndpoint(): string
     {
-        return '/trackers/'.$this->trackerId.'/results';
+        return '/trackers/'.rawurlencode($this->trackerId).'/results';
     }
 
     /**

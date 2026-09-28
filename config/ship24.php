@@ -35,7 +35,10 @@ return [
     | Webhook
     |--------------------------------------------------------------------------
     | Configure the inbound webhook endpoint that receives Ship24 push updates.
-    | Set SHIP24_WEBHOOK_SECRET to enable HMAC-SHA256 signature validation.
+    | Set SHIP24_WEBHOOK_SECRET to enable verification: Ship24 sends this secret back
+    | verbatim as "Authorization: Bearer {secret}" on every webhook request (a plain
+    | shared-secret comparison, not an HMAC signature — Ship24 does not sign webhook
+    | payloads).
     */
     'webhook' => [
         'enabled' => env('SHIP24_WEBHOOK_ENABLED', true),

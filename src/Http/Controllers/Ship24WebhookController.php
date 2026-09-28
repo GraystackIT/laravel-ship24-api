@@ -35,6 +35,11 @@ class Ship24WebhookController extends Controller
         return response()->json(['status' => 'ok', 'updated' => $updated]);
     }
 
+    /**
+     * Verify the webhook's shared secret. Ship24 does not sign webhook payloads — it sends the
+     * configured secret back verbatim as "Authorization: Bearer {secret}" on every request, so
+     * this is a plain constant-time string comparison, not an HMAC check.
+     */
     private function signatureValid(Request $request): bool
     {
         $secret = config('ship24.webhook.secret');

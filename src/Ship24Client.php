@@ -212,6 +212,9 @@ class Ship24Client
             $data['data']['trackers'] ?? []
         );
 
+        // Ship24's published OpenAPI schema for this endpoint doesn't document a `pagination`
+        // object at all; this key is read defensively and stays null if the live API never
+        // sends it, rather than assuming it's always present.
         $pagination = $data['data']['pagination'] ?? [];
 
         Log::info('Ship24: trackers listed', ['count' => count($trackers)]);
@@ -287,11 +290,19 @@ class Ship24Client
      *
      * @param  string      $trackingNumber
      * @param  string|null $shipmentReference
+     * @param  string|null $clientTrackerId
      * @param  string|null $originCountryCode
      * @param  string|null $destinationCountryCode
      * @param  string|null $destinationPostCode
      * @param  string|null $shippingDate
      * @param  string[]|null $courierCode
+     * @param  string|null $courierName
+     * @param  string|null $trackingUrl
+     * @param  string|null $orderNumber
+     * @param  string|null $title
+     * @param  string|null $recipientEmail
+     * @param  string|null $recipientName
+     * @param  bool|null   $restrictTrackingToCourierCode
      * @return TrackingResult
      *
      * @throws Ship24ApiException
@@ -299,11 +310,19 @@ class Ship24Client
     public function createAndTrack(
         string $trackingNumber,
         ?string $shipmentReference = null,
+        ?string $clientTrackerId = null,
         ?string $originCountryCode = null,
         ?string $destinationCountryCode = null,
         ?string $destinationPostCode = null,
         ?string $shippingDate = null,
         ?array $courierCode = null,
+        ?string $courierName = null,
+        ?string $trackingUrl = null,
+        ?string $orderNumber = null,
+        ?string $title = null,
+        ?string $recipientEmail = null,
+        ?string $recipientName = null,
+        ?bool $restrictTrackingToCourierCode = null,
     ): TrackingResult {
         Log::info('Ship24: create and track', ['trackingNumber' => $trackingNumber]);
 
@@ -311,11 +330,19 @@ class Ship24Client
             $response = $this->connector->send(new CreateAndTrackRequest(
                 trackingNumber: $trackingNumber,
                 shipmentReference: $shipmentReference,
+                clientTrackerId: $clientTrackerId,
                 originCountryCode: $originCountryCode,
                 destinationCountryCode: $destinationCountryCode,
                 destinationPostCode: $destinationPostCode,
                 shippingDate: $shippingDate,
                 courierCode: $courierCode,
+                courierName: $courierName,
+                trackingUrl: $trackingUrl,
+                orderNumber: $orderNumber,
+                title: $title,
+                recipientEmail: $recipientEmail,
+                recipientName: $recipientName,
+                restrictTrackingToCourierCode: $restrictTrackingToCourierCode,
             ));
         } catch (RequestException $e) {
             Log::error('Ship24: createAndTrack failed', [
@@ -355,7 +382,12 @@ class Ship24Client
      * @param  string               $trackerId  Tracker ID or clientTrackerId value
      * @param  array<string, mixed> $updates    Updatable fields: isSubscribed, courierCode,
      *                                          originCountryCode, destinationCountryCode,
-     *                                          destinationPostCode, shippingDate
+     *                                          destinationPostCode, shippingDate, courierName,
+     *                                          trackingUrl, recipient (only recipient.name is
+     *                                          patchable — recipient.email is not). Once a
+     *                                          tracker has gathered shipment data, courierCode,
+     *                                          originCountryCode, destinationCountryCode, and
+     *                                          shippingDate can no longer be changed.
      * @param  string|null          $searchBy   'trackerId' (default) or 'clientTrackerId'
      * @return Tracker
      *
@@ -506,17 +538,35 @@ class Ship24Client
     /**
      * Instantly search for tracking info by tracking number (per-call plan, no persistent tracker).
      *
-     * @param  string $trackingNumber
+     * @param  string        $trackingNumber
+     * @param  string|null   $originCountryCode       Recommended to improve tracking accuracy
+     * @param  string|null   $destinationCountryCode  Recommended to improve tracking accuracy
+     * @param  string|null   $destinationPostCode     Recommended to improve tracking accuracy
+     * @param  string|null   $shippingDate            Recommended to improve tracking accuracy
+     * @param  string[]|null $courierCode             Up to 3 courier codes; recommended to improve tracking accuracy
      * @return TrackingResult[]
      *
      * @throws Ship24ApiException
      */
-    public function searchByTrackingNumber(string $trackingNumber): array
-    {
+    public function searchByTrackingNumber(
+        string $trackingNumber,
+        ?string $originCountryCode = null,
+        ?string $destinationCountryCode = null,
+        ?string $destinationPostCode = null,
+        ?string $shippingDate = null,
+        ?array $courierCode = null,
+    ): array {
         Log::info('Ship24: searching by tracking number', ['trackingNumber' => $trackingNumber]);
 
         try {
-            $response = $this->connector->send(new SearchTrackingRequest($trackingNumber));
+            $response = $this->connector->send(new SearchTrackingRequest(
+                trackingNumber: $trackingNumber,
+                originCountryCode: $originCountryCode,
+                destinationCountryCode: $destinationCountryCode,
+                destinationPostCode: $destinationPostCode,
+                shippingDate: $shippingDate,
+                courierCode: $courierCode,
+            ));
         } catch (RequestException $e) {
             Log::error('Ship24: searchByTrackingNumber failed', [
                 'trackingNumber' => $trackingNumber,

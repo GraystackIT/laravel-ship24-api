@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use GraystackIT\Ship24\Connectors\Ship24Connector;
 use GraystackIT\Ship24\Data\BulkCreateResult;
+use GraystackIT\Ship24\Data\Delivery;
 use GraystackIT\Ship24\Data\Tracker;
 use GraystackIT\Ship24\Data\TrackingResult;
 use GraystackIT\Ship24\Exceptions\Ship24ApiException;
@@ -185,6 +186,22 @@ it('throws Ship24ApiException on 404 for getTracker', function () {
 
     expect(fn () => (new Ship24Client($connector))->getTracker('trk_missing'))
         ->toThrow(Ship24ApiException::class);
+});
+
+it('URL-encodes a trackerId containing special characters', function () {
+    $request = new GetTrackerRequest('has/slash and space');
+
+    $reflection = new ReflectionMethod($request, 'resolveEndpoint');
+
+    expect($reflection->invoke($request))->toBe('/trackers/has%2Fslash%20and%20space');
+});
+
+it('URL-encodes a tracking number containing a slash for getTrackingResultsByTrackingNumber', function () {
+    $request = new GetTrackingByTrackingNumberRequest('AB/12 34');
+
+    $reflection = new ReflectionMethod($request, 'resolveEndpoint');
+
+    expect($reflection->invoke($request))->toBe('/trackers/search/AB%2F12%2034/results');
 });
 
 // ── listTrackers ─────────────────────────────────────────────────────────────
@@ -388,6 +405,43 @@ it('createAndTrack result carries statistics when present', function () {
     $result = (new Ship24Client($connector))->createAndTrack('1Z999AA10123456784');
 
     expect($result->statistics)->toBe(['transitDays' => 5]);
+});
+
+it('sends the full set of optional fields for createAndTrack', function () {
+    $mockClient = new MockClient([
+        CreateAndTrackRequest::class => MockResponse::make([
+            'data' => ['trackings' => [makeTracking('trk_ct2', 'FULLNUM')]],
+        ], 200),
+    ]);
+
+    $connector = app(Ship24Connector::class);
+    $connector->withMockClient($mockClient);
+
+    (new Ship24Client($connector))->createAndTrack(
+        trackingNumber: 'FULLNUM',
+        clientTrackerId: 'my-ref-002',
+        courierName: 'USPS Standard',
+        trackingUrl: 'https://example.com/track',
+        orderNumber: 'ORDER-042',
+        title: 'Nike shoes for Marc',
+        recipientEmail: 'recipient@email.com',
+        recipientName: 'Marc',
+        restrictTrackingToCourierCode: true,
+    );
+
+    $lastRequest = $mockClient->getLastRequest();
+    expect($lastRequest)->toBeInstanceOf(CreateAndTrackRequest::class);
+
+    $reflection = new ReflectionMethod($lastRequest, 'defaultBody');
+    $body       = $reflection->invoke($lastRequest);
+
+    expect($body['clientTrackerId'])->toBe('my-ref-002')
+        ->and($body['courierName'])->toBe('USPS Standard')
+        ->and($body['trackingUrl'])->toBe('https://example.com/track')
+        ->and($body['orderNumber'])->toBe('ORDER-042')
+        ->and($body['title'])->toBe('Nike shoes for Marc')
+        ->and($body['recipient'])->toBe(['email' => 'recipient@email.com', 'name' => 'Marc'])
+        ->and($body['settings'])->toBe(['restrictTrackingToCourierCode' => true]);
 });
 
 it('throws Ship24ApiException on 404 for createAndTrack', function () {
@@ -622,6 +676,53 @@ it('returns TrackingResult array for searchByTrackingNumber', function () {
         ->and($results[0]->latestEvent())->toBeNull();
 });
 
+it('sends optional accuracy fields for searchByTrackingNumber', function () {
+    $mockClient = new MockClient([
+        SearchTrackingRequest::class => MockResponse::make(['data' => ['trackings' => []]], 200),
+    ]);
+
+    $connector = app(Ship24Connector::class);
+    $connector->withMockClient($mockClient);
+
+    (new Ship24Client($connector))->searchByTrackingNumber(
+        trackingNumber: 'JD014600006228974097',
+        originCountryCode: 'CN',
+        destinationCountryCode: 'US',
+        destinationPostCode: '94901',
+        shippingDate: '2021-03-01T11:09:00.000Z',
+        courierCode: ['us-post'],
+    );
+
+    $lastRequest = $mockClient->getLastRequest();
+    expect($lastRequest)->toBeInstanceOf(SearchTrackingRequest::class);
+
+    $reflection = new ReflectionMethod($lastRequest, 'defaultBody');
+    $body       = $reflection->invoke($lastRequest);
+
+    expect($body['originCountryCode'])->toBe('CN')
+        ->and($body['destinationCountryCode'])->toBe('US')
+        ->and($body['destinationPostCode'])->toBe('94901')
+        ->and($body['shippingDate'])->toBe('2021-03-01T11:09:00.000Z')
+        ->and($body['courierCode'])->toBe(['us-post']);
+});
+
+it('omits optional accuracy fields for searchByTrackingNumber when not provided', function () {
+    $mockClient = new MockClient([
+        SearchTrackingRequest::class => MockResponse::make(['data' => ['trackings' => []]], 200),
+    ]);
+
+    $connector = app(Ship24Connector::class);
+    $connector->withMockClient($mockClient);
+
+    (new Ship24Client($connector))->searchByTrackingNumber('JD014600006228974097');
+
+    $lastRequest = $mockClient->getLastRequest();
+    $reflection  = new ReflectionMethod($lastRequest, 'defaultBody');
+    $body        = $reflection->invoke($lastRequest);
+
+    expect($body)->toBe(['trackingNumber' => 'JD014600006228974097']);
+});
+
 it('throws Ship24ApiException on 429 for searchByTrackingNumber', function () {
     $mockClient = new MockClient([
         SearchTrackingRequest::class => MockResponse::make(['error' => 'Too Many Requests'], 429),
@@ -632,4 +733,28 @@ it('throws Ship24ApiException on 429 for searchByTrackingNumber', function () {
 
     expect(fn () => (new Ship24Client($connector))->searchByTrackingNumber('SOMENUM'))
         ->toThrow(Ship24ApiException::class);
+});
+
+// ── Delivery::fromArray ──────────────────────────────────────────────────────
+
+it('parses the aiPredictiveDeliveryDate add-on field when present', function () {
+    $delivery = Delivery::fromArray([
+        'estimatedDeliveryDate' => '2021-03-04T18:00:00',
+        'aiPredictiveDeliveryDate' => [
+            'from' => '2021-03-04T17:00:00+01:00',
+            'to'   => '2021-03-04T18:00:00+01:00',
+        ],
+    ]);
+
+    expect($delivery->aiPredictiveDeliveryFrom)->toBe('2021-03-04T17:00:00+01:00')
+        ->and($delivery->aiPredictiveDeliveryTo)->toBe('2021-03-04T18:00:00+01:00');
+});
+
+it('defaults aiPredictiveDeliveryDate to null when the add-on is not subscribed', function () {
+    $delivery = Delivery::fromArray([
+        'estimatedDeliveryDate' => '2021-03-04T18:00:00',
+    ]);
+
+    expect($delivery->aiPredictiveDeliveryFrom)->toBeNull()
+        ->and($delivery->aiPredictiveDeliveryTo)->toBeNull();
 });
